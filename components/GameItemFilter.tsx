@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button"
 import { Plus, ChevronUp, ChevronDown } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Line } from 'react-chartjs-2'
 import {
@@ -239,13 +239,20 @@ interface HistoryEntry {
   '1d_buy_sold': number;
 }
 
-// Add this interface near the top of your file, after the imports
-interface FilterEntry {
+// At the top of your file, add or update this type definition
+type FilterEntry = {
   key: string;
   value: [string, string];
+};
+
+interface GameItemFilterProps {
+  initialSearchParams: string
 }
 
-export default function GameItemFilter() {
+export default function GameItemFilter({ initialSearchParams }: GameItemFilterProps) {
+  const router = useRouter()
+  const [searchParams, setSearchParams] = useState<URLSearchParams>(new URLSearchParams(initialSearchParams))
+
   // State declarations
   const [page, setPage] = useState(1)
   const [limit, setLimit] = useState(20)
@@ -258,30 +265,17 @@ export default function GameItemFilter() {
   const [timePeriod, setTimePeriod] = useState('1D')
 
   // Hooks
-  const router = useRouter()
-  const searchParams = useSearchParams()
   const searchInputRef = useRef<HTMLInputElement>(null)
   const debouncedSearchTerm = useDebounce(searchTerm, 300)
 
   // Query
   const fetchItems = useCallback(async () => {
-    const queryParams = new URLSearchParams({
-      page: page.toString(),
-      limit: limit.toString(),
-      sortKey: sortConfig.key,
-      sortDirection: sortConfig.direction,
-      ...(searchTerm && { search: searchTerm }),
-      ...Object.fromEntries(
-        filters.map(filter => [filter.key, filter.value.join(',')])
-      )
-    })
-
-    const response = await fetch(`/api/items?${queryParams}`)
+    const response = await fetch(`/api/items?${searchParams.toString()}`)
     if (!response.ok) {
       throw new Error('Network response was not ok')
     }
     return response.json()
-  }, [page, limit, sortConfig, searchTerm, filters])
+  }, [searchParams])
 
   const { data, error, isLoading, isFetching } = useQuery({
     queryKey: ['items', page, limit, sortConfig, searchTerm, filters],
@@ -296,9 +290,24 @@ export default function GameItemFilter() {
     }
   }, [data?.lastUpdated])
 
+  const updateURL = useCallback(() => {
+    const newSearchParams = new URLSearchParams(searchParams)
+    newSearchParams.set('page', page.toString())
+    newSearchParams.set('limit', limit.toString())
+    newSearchParams.set('sortKey', sortConfig.key)
+    newSearchParams.set('sortDirection', sortConfig.direction)
+    if (searchTerm) newSearchParams.set('search', searchTerm)
+    filters.forEach(filter => {
+      newSearchParams.set(filter.key, filter.value.join(','))
+    })
+    
+    const newUrl = `${window.location.pathname}?${newSearchParams.toString()}`
+    router.push(newUrl, { scroll: false })
+  }, [searchParams, page, limit, sortConfig, searchTerm, filters, router])
+
   useEffect(() => {
     updateURL()
-  }, [searchTerm, page, sortConfig, filters])
+  }, [updateURL])
 
   // Memoized values
   const filteredHistoryData = useMemo(() => {
@@ -507,41 +516,57 @@ export default function GameItemFilter() {
   }, [])
 
   const handleSort = useCallback((key: string) => {
-    setSortConfig(prevConfig => ({
-      key,
-      direction: prevConfig.key === key && prevConfig.direction === 'asc' ? 'desc' : 'asc'
-    }))
-  }, [])
+    setSortConfig(prevConfig => {
+      const newDirection: 'asc' | 'desc' = prevConfig.key === key && prevConfig.direction === 'asc' ? 'desc' : 'asc';
+      const newConfig: SortConfig = {
+        key,
+        direction: newDirection
+      };
+      searchParams.set('sortKey', newConfig.key);
+      searchParams.set('sortDirection', newConfig.direction);
+      setSearchParams(new URLSearchParams(searchParams));
+      return newConfig;
+    });
+  }, [searchParams]);
 
-  const addFilter = (key: string) => {
-    setFilters(prev => [...prev, { key, value: ['', ''] }])
-  }
-
-  const removeFilter = (key: string) => {
-    setFilters(prev => prev.filter(filter => filter.key !== key))
-  }
-
-  const updateFilter = (key: string, value: [string, string]) => {
-    setFilters(prev => prev.map(filter => 
-      filter.key === key ? { ...filter, value } : filter
-    ))
-  }
-
-  const updateURL = useCallback(() => {
-    const params = new URLSearchParams()
-    if (searchTerm) params.set('search', searchTerm)
-    params.set('page', page.toString())
-    if (sortConfig.key) {
-      params.set('sortKey', sortConfig.key)
-      params.set('sortDirection', sortConfig.direction)
+  const handleSearch = useCallback((term: string) => {
+    setSearchTerm(term)
+    if (term) {
+      searchParams.set('search', term)
+    } else {
+      searchParams.delete('search')
     }
-    filters.forEach(filter => {
-      if (filter.value[0] || filter.value[1]) {
-        params.set(filter.key, filter.value.join(','))
-      }
+    setSearchParams(new URLSearchParams(searchParams))
+    setPage(1)
+  }, [searchParams])
+
+  const addFilter = useCallback((key: string) => {
+    setFilters(prevFilters => {
+      const newFilters: FilterEntry[] = [...prevFilters, { key, value: ['', ''] }];
+      searchParams.set(key, ',');
+      setSearchParams(new URLSearchParams(searchParams));
+      return newFilters;
+    });
+  }, [searchParams]);
+
+  const updateFilter = useCallback((index: number, newValue: [string, string]) => {
+    setFilters(prevFilters => {
+      const newFilters = [...prevFilters];
+      newFilters[index] = { ...newFilters[index], value: newValue };
+      searchParams.set(newFilters[index].key, newValue.join(','));
+      setSearchParams(new URLSearchParams(searchParams));
+      return newFilters;
+    });
+  }, [searchParams]);
+
+  const removeFilter = useCallback((index: number) => {
+    setFilters(prevFilters => {
+      const newFilters = prevFilters.filter((_, i) => i !== index)
+      searchParams.delete(prevFilters[index].key)
+      setSearchParams(new URLSearchParams(searchParams))
+      return newFilters
     })
-    router.push(`?${params.toString()}`, { scroll: false })
-  }, [searchTerm, page, sortConfig, filters, router])
+  }, [searchParams])
 
   // Render
   if (error) return <div>An error occurred: {(error as Error).message}</div>
@@ -555,17 +580,17 @@ export default function GameItemFilter() {
               type="text"
               placeholder="Search items..."
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e) => handleSearch(e.target.value)}
               className="w-full"
             />
             <div className="flex flex-wrap gap-2">
-              {filters.map((entry: FilterEntry) => (
+              {filters.map((entry: FilterEntry, index: number) => (
                 <div key={entry.key} className="mb-2">
                   <FilterInput
                     label={entry.key}
                     value={entry.value}
-                    onChange={(value) => updateFilter(entry.key, value)}
-                    onRemove={() => removeFilter(entry.key)}
+                    onChange={(value) => updateFilter(index, value)}
+                    onRemove={() => removeFilter(index)}
                   />
                 </div>
               ))}
