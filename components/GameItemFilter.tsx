@@ -228,16 +228,30 @@ ChartJS.register(
   Filler
 )
 
+// Add this interface at the top of your file, after the imports
+interface HistoryEntry {
+  date: string;
+  sell_price: number;
+  buy_price: number;
+  sell_quantity: number;
+  buy_quantity: number;
+  '1d_sell_sold': number;
+  '1d_buy_sold': number;
+}
+
+// Add this interface near the top of your file, after the imports
+interface FilterEntry {
+  key: string;
+  value: [string, string];
+}
+
 export default function GameItemFilter() {
   // State declarations
   const [page, setPage] = useState(1)
   const [limit, setLimit] = useState(20)
   const [searchTerm, setSearchTerm] = useState('')
   const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'name', direction: 'asc' })
-  const [filters, setFilters] = useState<{ [key: string]: string }>({
-    rarity: 'all',
-    type: 'all'
-  })
+  const [filters, setFilters] = useState<FilterEntry[]>([])
   const [lastUpdated, setLastUpdated] = useState<string | null>(null)
   const [showRarityFilter, setShowRarityFilter] = useState(false)
   const [showTypeFilter, setShowTypeFilter] = useState(false)
@@ -258,12 +272,7 @@ export default function GameItemFilter() {
       sortDirection: sortConfig.direction,
       ...(searchTerm && { search: searchTerm }),
       ...Object.fromEntries(
-        Object.entries(filters).filter(([key, value]) => {
-          if (key === 'rarity' || key === 'type') {
-            return value !== 'all'
-          }
-          return value !== ''
-        })
+        filters.map(filter => [filter.key, filter.value.join(',')])
       )
     })
 
@@ -304,25 +313,25 @@ export default function GameItemFilter() {
     let filteredData = data.history
 
     if (timePeriod === '1D') {
-      filteredData = filteredData.filter(entry => new Date(entry.date) >= oneDayAgo)
+      filteredData = filteredData.filter((entry: HistoryEntry) => new Date(entry.date) >= oneDayAgo)
     } else if (timePeriod === '1W') {
-      filteredData = filteredData.filter(entry => new Date(entry.date) >= oneWeekAgo)
+      filteredData = filteredData.filter((entry: HistoryEntry) => new Date(entry.date) >= oneWeekAgo)
     } else if (timePeriod === '1M') {
-      filteredData = filteredData.filter(entry => new Date(entry.date) >= oneMonthAgo)
+      filteredData = filteredData.filter((entry: HistoryEntry) => new Date(entry.date) >= oneMonthAgo)
     } else if (timePeriod === '6M') {
-      filteredData = filteredData.filter(entry => new Date(entry.date) >= sixMonthsAgo)
+      filteredData = filteredData.filter((entry: HistoryEntry) => new Date(entry.date) >= sixMonthsAgo)
     }
 
-    return filteredData.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    return filteredData.sort((a: HistoryEntry, b: HistoryEntry) => new Date(b.date).getTime() - new Date(a.date).getTime())
   }, [data?.history, timePeriod])
 
   const chartData = useMemo(() => {
     return {
-      labels: filteredHistoryData.map(entry => new Date(entry.date)),
+      labels: filteredHistoryData.map((entry: HistoryEntry) => new Date(entry.date)),
       datasets: [
         {
           label: 'Sell',
-          data: filteredHistoryData.map(entry => entry.sell_price),
+          data: filteredHistoryData.map((entry: HistoryEntry) => entry.sell_price),
           borderColor: '#674FFF',
           backgroundColor: '#674FFF',
           fill: false,
@@ -332,7 +341,7 @@ export default function GameItemFilter() {
         },
         {
           label: 'Buy',
-          data: filteredHistoryData.map(entry => entry.buy_price),
+          data: filteredHistoryData.map((entry: HistoryEntry) => entry.buy_price),
           borderColor: '#FF2418',
           backgroundColor: '#FF2418',
           fill: false,
@@ -342,7 +351,7 @@ export default function GameItemFilter() {
         },
         {
           label: 'Supply',
-          data: filteredHistoryData.map(entry => entry.sell_quantity),
+          data: filteredHistoryData.map((entry: HistoryEntry) => entry.sell_quantity),
           borderColor: '#674FFF',
           backgroundColor: '#674FFF',
           fill: false,
@@ -353,7 +362,7 @@ export default function GameItemFilter() {
         },
         {
           label: 'Demand',
-          data: filteredHistoryData.map(entry => entry.buy_quantity),
+          data: filteredHistoryData.map((entry: HistoryEntry) => entry.buy_quantity),
           borderColor: '#FF2418',
           backgroundColor: '#FF2418',
           fill: false,
@@ -364,7 +373,7 @@ export default function GameItemFilter() {
         },
         {
           label: 'Sold',
-          data: filteredHistoryData.map(entry => entry['1d_sell_sold']),
+          data: filteredHistoryData.map((entry: HistoryEntry) => entry['1d_sell_sold']),
           borderColor: '#674FFF',
           backgroundColor: '#674FFF',
           fill: false,
@@ -375,7 +384,7 @@ export default function GameItemFilter() {
         },
         {
           label: 'Offers',
-          data: filteredHistoryData.map(entry => entry['1d_buy_sold']),
+          data: filteredHistoryData.map((entry: HistoryEntry) => entry['1d_buy_sold']),
           borderColor: '#606063',
           backgroundColor: '#606063',
           fill: false,
@@ -386,7 +395,7 @@ export default function GameItemFilter() {
         },
         {
           label: 'Bought',
-          data: filteredHistoryData.map(entry => entry['1d_buy_sold']),
+          data: filteredHistoryData.map((entry: HistoryEntry) => entry['1d_buy_sold']),
           borderColor: '#FF2418',
           backgroundColor: '#FF2418',
           fill: false,
@@ -397,7 +406,7 @@ export default function GameItemFilter() {
         },
         {
           label: 'Bids',
-          data: filteredHistoryData.map(entry => entry.buy_quantity),
+          data: filteredHistoryData.map((entry: HistoryEntry) => entry.buy_quantity),
           borderColor: '#606063',
           backgroundColor: '#606063',
           fill: false,
@@ -505,21 +514,17 @@ export default function GameItemFilter() {
   }, [])
 
   const addFilter = (key: string) => {
-    if (!filters[key]) {
-      if (key === 'rarity' || key === 'type') {
-        setFilters(prev => ({ ...prev, [key]: 'all' }))
-      } else {
-        setFilters(prev => ({ ...prev, [key]: '' }))
-      }
-    }
+    setFilters(prev => [...prev, { key, value: ['', ''] }])
   }
 
   const removeFilter = (key: string) => {
-    setFilters(prev => {
-      const newFilters = { ...prev }
-      delete newFilters[key]
-      return newFilters
-    })
+    setFilters(prev => prev.filter(filter => filter.key !== key))
+  }
+
+  const updateFilter = (key: string, value: [string, string]) => {
+    setFilters(prev => prev.map(filter => 
+      filter.key === key ? { ...filter, value } : filter
+    ))
   }
 
   const updateURL = useCallback(() => {
@@ -530,8 +535,10 @@ export default function GameItemFilter() {
       params.set('sortKey', sortConfig.key)
       params.set('sortDirection', sortConfig.direction)
     }
-    Object.entries(filters).forEach(([key, value]) => {
-      if (value) params.set(key, value)
+    filters.forEach(filter => {
+      if (filter.value[0] || filter.value[1]) {
+        params.set(filter.key, filter.value.join(','))
+      }
     })
     router.push(`?${params.toString()}`, { scroll: false })
   }, [searchTerm, page, sortConfig, filters, router])
@@ -552,58 +559,14 @@ export default function GameItemFilter() {
               className="w-full"
             />
             <div className="flex flex-wrap gap-2">
-              {Object.entries(filters).map(([key, value]) => (
-                <div key={key} className="flex items-center space-x-2 bg-secondary p-2 rounded-md">
-                  <span className="text-sm font-medium w-24">{key}</span>
-                  {key === 'rarity' || key === 'type' ? (
-                    <Select value={value} onValueChange={(newValue) => setFilters(prev => ({ ...prev, [key]: newValue }))}>
-                      <SelectTrigger className="w-[180px] bg-white">
-                        <SelectValue placeholder={`Select ${key}`} />
-                      </SelectTrigger>
-                      <SelectContent className="bg-white">
-                        <SelectItem value="all" className="hover:bg-gray-100">All</SelectItem>
-                        {key === 'rarity' ? (
-                          <>
-                            <SelectItem value="Junk" className="hover:bg-gray-100">Junk</SelectItem>
-                            <SelectItem value="Basic" className="hover:bg-gray-100">Basic</SelectItem>
-                            <SelectItem value="Fine" className="hover:bg-gray-100">Fine</SelectItem>
-                            <SelectItem value="Masterwork" className="hover:bg-gray-100">Masterwork</SelectItem>
-                            <SelectItem value="Rare" className="hover:bg-gray-100">Rare</SelectItem>
-                            <SelectItem value="Exotic" className="hover:bg-gray-100">Exotic</SelectItem>
-                            <SelectItem value="Ascended" className="hover:bg-gray-100">Ascended</SelectItem>
-                            <SelectItem value="Legendary" className="hover:bg-gray-100">Legendary</SelectItem>
-                          </>
-                        ) : (
-                          <>
-                            <SelectItem value="Armor" className="hover:bg-gray-100">Armor</SelectItem>
-                            <SelectItem value="Back" className="hover:bg-gray-100">Back</SelectItem>
-                            <SelectItem value="Bag" className="hover:bg-gray-100">Bag</SelectItem>
-                            <SelectItem value="Consumable" className="hover:bg-gray-100">Consumable</SelectItem>
-                            <SelectItem value="Container" className="hover:bg-gray-100">Container</SelectItem>
-                            <SelectItem value="CraftingMaterial" className="hover:bg-gray-100">Crafting Material</SelectItem>
-                            <SelectItem value="Gathering" className="hover:bg-gray-100">Gathering</SelectItem>
-                            <SelectItem value="Gizmo" className="hover:bg-gray-100">Gizmo</SelectItem>
-                            <SelectItem value="MiniPet" className="hover:bg-gray-100">Mini Pet</SelectItem>
-                            <SelectItem value="Tool" className="hover:bg-gray-100">Tool</SelectItem>
-                            <SelectItem value="Trinket" className="hover:bg-gray-100">Trinket</SelectItem>
-                            <SelectItem value="Trophy" className="hover:bg-gray-100">Trophy</SelectItem>
-                            <SelectItem value="UpgradeComponent" className="hover:bg-gray-100">Upgrade Component</SelectItem>
-                            <SelectItem value="Weapon" className="hover:bg-gray-100">Weapon</SelectItem>
-                          </>
-                        )}
-                      </SelectContent>
-                    </Select>
-                  ) : (
-                    <FilterInput
-                      label={key}
-                      value={value.split(',')}
-                      onChange={(newValue) => setFilters(prev => ({ ...prev, [key]: newValue.join(',') }))}
-                      onRemove={() => removeFilter(key)}
-                    />
-                  )}
-                  <Button onClick={() => removeFilter(key)} variant="outline" size="sm">
-                    Remove
-                  </Button>
+              {filters.map((entry: FilterEntry) => (
+                <div key={entry.key} className="mb-2">
+                  <FilterInput
+                    label={entry.key}
+                    value={entry.value}
+                    onChange={(value) => updateFilter(entry.key, value)}
+                    onRemove={() => removeFilter(entry.key)}
+                  />
                 </div>
               ))}
             </div>

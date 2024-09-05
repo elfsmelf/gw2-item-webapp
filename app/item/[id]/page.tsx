@@ -48,16 +48,18 @@ interface ListingsData {
 }
 
 const ItemDetails = () => {
-  const { id } = useParams()
+  const params = useParams()
+  const id = params?.id as string  // Type assertion
   const router = useRouter()
   const searchParams = useSearchParams()
 
   const handleBack = () => {
-    const queryString = searchParams.toString()
+    const queryString = searchParams ? searchParams.toString() : ''
     router.push(queryString ? `/?${queryString}` : '/')
   }
 
   const fetchItemDetails = async () => {
+    if (!id) throw new Error('No item ID provided')
     const response = await fetch(`/api/items/${id}`)
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
@@ -67,7 +69,8 @@ const ItemDetails = () => {
 
   const { data: item, error, isLoading } = useQuery({
     queryKey: ['itemDetails', id],
-    queryFn: fetchItemDetails
+    queryFn: fetchItemDetails,
+    enabled: !!id  // Only run the query if we have an id
   })
 
   const { data: listingsData, isLoading: listingsLoading } = useQuery<ListingsData>({
@@ -122,53 +125,47 @@ const ItemDetails = () => {
 
   return (
     <div className="container mx-auto p-4">
-      {isLoading ? (
-        <Skeleton className="h-48 w-full" />
-      ) : itemData ? (
-        <Card>
-          <CardHeader>
-            <div className="flex items-center space-x-4">
-              <img src={itemData.img} alt={itemData.name} className="w-16 h-16" />
-              <div>
-                <CardTitle>{itemData.name}</CardTitle>
-                <Badge>{itemData.rarity}</Badge>
-                <Badge>{itemData.type}</Badge>
-              </div>
+      <Card>
+        <CardHeader>
+          <div className="flex items-center space-x-4">
+            <img src={item.img} alt={item.name} className="w-16 h-16" />
+            <div>
+              <CardTitle>{item.name}</CardTitle>
+              <Badge>{item.rarity}</Badge>
+              <Badge>{item.type}</Badge>
             </div>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <h3 className="text-lg font-semibold">Buy Order</h3>
-                <p>Price: <CoinDisplay amount={itemData.buy_price} /></p>
-                <p>Quantity: {itemData.buy_quantity.toLocaleString()}</p>
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold">Sell Listing</h3>
-                <p>Price: <CoinDisplay amount={itemData.sell_price} /></p>
-                <p>Quantity: {itemData.sell_quantity.toLocaleString()}</p>
-              </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <h3 className="text-lg font-semibold">Buy Order</h3>
+              <p>Price: <CoinDisplay amount={item.buy_price} /></p>
+              <p>Quantity: {item.buy_quantity.toLocaleString()}</p>
             </div>
-            <div className="mt-4">
-              <h3 className="text-lg font-semibold">24 Hour Trading Volume</h3>
-              <p>Buy orders filled: {itemData['1d_buy_sold'].toLocaleString()}</p>
-              <p>Sell listings filled: {itemData['1d_sell_sold'].toLocaleString()}</p>
+            <div>
+              <h3 className="text-lg font-semibold">Sell Listing</h3>
+              <p>Price: <CoinDisplay amount={item.sell_price} /></p>
+              <p>Quantity: {item.sell_quantity.toLocaleString()}</p>
             </div>
-            <div className="mt-4 flex space-x-2">
-              <Button onClick={copyToClipboard}>
-                <Copy className="mr-2 h-4 w-4" /> Copy Chat Link
-              </Button>
-              <Button asChild>
-                <a href={`https://www.gw2bltc.com/en/item/${itemData.id}`} target="_blank" rel="noopener noreferrer">
-                  <ExternalLink className="mr-2 h-4 w-4" /> View on GW2BLTC
-                </a>
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      ) : (
-        <p>No item data available.</p>
-      )}
+          </div>
+          <div className="mt-4">
+            <h3 className="text-lg font-semibold">24 Hour Trading Volume</h3>
+            <p>Buy orders filled: {item['1d_buy_sold'].toLocaleString()}</p>
+            <p>Sell listings filled: {item['1d_sell_sold'].toLocaleString()}</p>
+          </div>
+          <div className="mt-4 flex space-x-2">
+            <Button onClick={() => navigator.clipboard.writeText(item.chat_link)}>
+              <Copy className="mr-2 h-4 w-4" /> Copy Chat Link
+            </Button>
+            <Button asChild>
+              <a href={`https://www.gw2bltc.com/en/item/${item.id}`} target="_blank" rel="noopener noreferrer">
+                <ExternalLink className="mr-2 h-4 w-4" /> View on GW2BLTC
+              </a>
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
         <Card className="border rounded-lg shadow-sm">

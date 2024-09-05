@@ -36,7 +36,8 @@ export async function GET(request: Request) {
       if (type && item.type !== type) return false
 
       // Handle numeric filters
-      for (const [key, value] of searchParams.entries()) {
+      const entries = Array.from(searchParams.entries());
+      for (const [key, value] of entries) {
         if (['buy_price', 'sell_price', 'expected_profit', '1d_buy_sold', '1d_sell_sold'].includes(key)) {
           const [min, max] = value.split(',').map(Number)
           let itemValue = item[key]
